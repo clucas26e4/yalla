@@ -6,23 +6,26 @@
 (* not cuts here, see ll_cut.v for cut admissibility and ll_prop.v for other properties *)
 
 Require Import CMorphisms.
+Require Import Lia.
+Require Import PeanoNat.
+Require Import Eqdep_dec.
+Require Import EqdepFacts.
 
 Require Import Bool_more.
 Require Import List_more.
 Require Import List_Type_more.
-Require Import Permutation_Type_more.
-Require Import CyclicPerm_Type.
-Require Import Permutation_Type_solve.
-Require Import CPermutation_Type_solve.
-Require Import genperm_Type.
-Require Import Forall_Type_more2.
 Require Import Dependent_Forall_Type.
 Require Import concat_Type_more.
-Require Import flat_map_Type_more.
-Require Import EqdepFacts.
-Require Import Eqdep_dec.
-Require Import Lia.
-Require Import PeanoNat.
+Require Import List_nat.
+Require Import List_manip.
+Require Import Perm_R_more.
+Require Import CyclicPerm_R.
+Require Import Perm_R_solve.
+Require Import CyclicPerm_R_solve.
+Require Import genperm_R.
+Require Import Perm_solve.
+Require Import Permutation_more.
+Require Import Permutation_solve.
 
 Require Export basic_misc.
 Require Export formulas.
@@ -239,9 +242,9 @@ All rules have their main formula at first position in the conclusion.
 *)
 Inductive ll P : list formula -> Type :=
 | ax_r : forall X, ll P (covar X :: var X :: nil)
-| ex_r : forall l1 l2, ll P l1 -> PCperm_Type (pperm P) l1 l2 -> ll P l2
-| ex_wn_r : forall l1 lw lw' l2, ll P (l1 ++ map wn lw ++ l2) ->
-               Permutation_Type lw lw' -> ll P (l1 ++ map wn lw' ++ l2)
+| ex_r : forall l f, ll P l -> cond_PCperm (pperm P) f -> length f = length l -> ll P (app_nat_fun l f)
+| ex_wn_r : forall l1 lw l2 f, ll P (l1 ++ map wn lw ++ l2) ->
+is_perm f = true -> length f = length lw -> ll P (l1 ++ map wn (app_nat_fun lw f) ++ l2)
 | mix_r : forall L, pmix P (length L) = true ->
                     Forall_Type (ll P) L ->
                     ll P (concat L)
@@ -273,6 +276,35 @@ apply mix_r.
 - apply list_to_Forall.
 Defined.
 
+Definition ex'_r P l1 l2 (pi : ll P l1) (p : PCperm_R (pperm P) l1 l2) : ll P l2.
+Proof with try assumption; try reflexivity.
+  case_eq (pperm P); intros Hperm; rewrite Hperm in p; simpl in p.
+  - destruct p as ((f & Hp) & (Hlen & Heq)).
+    rewrite Heq.
+    unfold Perm.app_perm; simpl.
+    apply ex_r...
+    rewrite Hperm...
+  - destruct p as ((f & Hp) & (Hlen & Heq)).
+    destruct Hp as [((n & m) & Heqf) | Heqf]; unfold app_CyclicPerm in *; simpl in *.
+    + rewrite Heq.
+      apply ex_r...
+      rewrite Hperm.
+      left.
+      exists (n , m)...
+    + rewrite Heq.
+      apply ex_r...
+      rewrite Hperm.
+      right...
+Defined.
+
+Definition ex_wn'_r P l1 lw lw' l2 (pi : ll P (l1 ++ map wn lw ++ l2)) (p : Perm_R lw lw') : ll P (l1 ++ map wn lw' ++ l2).
+Proof with try assumption; try reflexivity.
+  destruct p as ((f & Hp) & (Hlen & Heq)).
+  rewrite Heq.
+  unfold app_perm; simpl.
+  apply ex_wn_r...
+Defined.
+
 Section ll_ind.
   Variable P : pfrag.
 
@@ -290,8 +322,8 @@ Section ll_ind.
 
   Fixpoint ll_nested_ind {l} (pi : ll P l): forall (Pred : forall l, ll P l -> Type),
            (forall X, Pred (covar X :: var X :: nil) (ax_r P X)) ->
-           (forall l1 l2 pi p, Pred l1 pi -> Pred l2 (ex_r P l1 l2 pi p)) ->
-           (forall l1 lw lw' l2 pi p, Pred (l1 ++ map wn lw ++ l2) pi -> Pred (l1 ++ map wn lw' ++ l2) (ex_wn_r P l1 lw lw' l2 pi p)) ->
+           (forall l1 f pi p Hlen, Pred l1 pi -> Pred (app_nat_fun l1 f) (ex_r P l1 f pi p Hlen)) ->
+           (forall l1 lw l2 f pi p Hlen, Pred (l1 ++ map wn lw ++ l2) pi -> Pred (l1 ++ map wn (app_nat_fun lw f) ++ l2) (ex_wn_r P l1 lw l2 f pi p Hlen)) ->
            (forall L eqpmix PL, Forall_Proofs Pred PL -> Pred (concat L) (mix_r P L eqpmix PL)) ->
            (Pred (one :: nil) (one_r P)) ->
            (forall l pi, Pred l pi -> Pred (bot :: l) (bot_r P l pi)) ->
@@ -312,8 +344,8 @@ Section ll_ind.
       fun Pred ax_case ex_case ex_wn_case mix_case one_case bot_case tens_case parr_case top_case plus_case1 plus_case2 with_case oc_case de_case wk_case co_case cut_case gax_case => let rec_call {l : list formula} (pi : ll P l) := (ll_nested_ind pi Pred ax_case ex_case ex_wn_case mix_case one_case bot_case tens_case parr_case top_case plus_case1 plus_case2 with_case oc_case de_case wk_case co_case cut_case gax_case) in
     match pi with
     | ax_r _ X => ax_case X
-    | ex_r _ l1 l2 pi p => ex_case l1 l2 pi p (rec_call pi)
-    | ex_wn_r _ l1 lw lw' l2 pi p => ex_wn_case l1 lw lw' l2 pi p (rec_call pi)
+    | ex_r _ l1 l2 pi p Hlen => ex_case l1 l2 pi p Hlen (rec_call pi)
+    | ex_wn_r _ l1 lw lw' l2 pi p Hlen => ex_wn_case l1 lw lw' l2 pi p Hlen (rec_call pi)
     | mix_r _ L eqpmix PL => mix_case L eqpmix PL (
                                         (fix ll_nested_ind_aux (L : list (list formula)) (PL : Forall_Type (ll P) L) : Forall_Proofs Pred PL :=
                                            match PL with
@@ -341,10 +373,8 @@ Section ll_ind.
   Lemma ll_nested_ind' {l} (pi : ll P l): forall (Pred : forall l, ll 
 P l -> Type),
             (forall X, Pred (covar X :: var X :: nil) (ax_r P X)) ->
-            (forall l1 l2 pi p, Pred l1 pi -> Pred l2 (ex_r P l1 l2 pi 
-p)) ->
-            (forall l1 lw lw' l2 pi p, Pred (l1 ++ map wn lw ++ l2) pi 
--> Pred (l1 ++ map wn lw' ++ l2) (ex_wn_r P l1 lw lw' l2 pi p)) ->
+            (forall l1 f pi p Hlen, Pred l1 pi -> Pred (app_nat_fun l1 f) (ex_r P l1 f pi p Hlen)) ->
+            (forall l1 lw l2 f pi p Hlen, Pred (l1 ++ map wn lw ++ l2) pi -> Pred (l1 ++ map wn (app_nat_fun lw f) ++ l2) (ex_wn_r P l1 lw l2 f pi p Hlen)) ->
             (forall L eqpmix, Forall_Type (fun x => Pred (projT1 x) 
 (projT2 x)) L -> Pred _ (mix'_r P L eqpmix)) ->
             (Pred (one :: nil) (one_r P)) ->
@@ -406,16 +436,16 @@ l) (co_r P A l pi)) ->
   Qed.
 End ll_ind.
 
-Instance ll_perm {P} : Proper ((@PCperm_Type _ (pperm P)) ==> Basics.arrow) (ll P).
+Instance ll_perm {P} : Proper ((@PCperm_R _ (pperm P)) ==> Basics.arrow) (ll P).
 Proof.
-intros l1 l2 HP pi ; eapply ex_r ; eassumption.
+intros l1 l2 HP pi; eapply ex'_r; eassumption.
 Qed.
 
 Fixpoint psize {P l} (pi : ll P l) :=
 match pi with
 | ax_r _ _ => 1
-| ex_r _ _ _ pi0 _ => S (psize pi0)
-| ex_wn_r _ _ _ _ _ pi0 _ => S (psize pi0)
+| ex_r _ _ _ pi0 _ _ => S (psize pi0)
+| ex_wn_r _ _ _ _ _ pi0 _ _ => S (psize pi0)
 | mix_r _ L _ PL => S ((fix psize_Forall P L (PL : Forall_Type (ll P) L) {struct PL} :=
        match PL with
        | Forall_Type_nil _ => 0
@@ -473,8 +503,8 @@ Qed.
 Fixpoint gax_elts {P l} (pi : ll P l) :=
 match pi with
 | ax_r _ _ => nil
-| ex_r _ _ _ pi0 _ => gax_elts pi0
-| ex_wn_r _ _ _ _ _ pi0 _ => gax_elts pi0
+| ex_r _ _ _ pi0 _ _ => gax_elts pi0
+| ex_wn_r _ _ _ _ _ pi0 _ _ => gax_elts pi0
 | mix_r _ L _ PL => (fix gax_elts_Forall P L (PL : Forall_Type (ll P) L) {struct PL} :=
        match PL with
        | Forall_Type_nil _ => nil
@@ -527,11 +557,8 @@ Proof with myeeasy.
   induction pi using (ll_nested_ind' P) ; try (constructor ; myeasy ; fail).
   - apply (ex_r _ l1)...
     destruct Heq as (_ & _ & _  & Hp).
-    unfold PCperm_Type in p.
-    unfold PCperm_Type.
     destruct (pperm P) ; destruct (pperm Q) ;
       simpl in Hp ; try inversion Hp...
-  - apply (ex_wn_r _ l1 lw)...
   - assert ({L' : list (sigT (ll Q)) & (map (@projT1 _ (ll Q)) L') = (map (@projT1 _ (ll P)) L)}) as (L' & eqL').
     + destruct eqpmix.
       induction L.
@@ -570,12 +597,9 @@ intros Hle l H.
 induction H using (ll_nested_ind' P) ; try (constructor ; myeasy ; fail).
 - apply (ex_r _ l1)...
   destruct Hle as (_ & _ & _  & Hp).
-  unfold PCperm_Type in p.
-  unfold PCperm_Type.
   destruct (pperm P) ; destruct (pperm Q) ;
     simpl in Hp ; try inversion Hp...
-  apply cperm_perm_Type...
-- apply (ex_wn_r _ l1 lw)...
+  apply CyclicPerm_Perm...
 - assert ({L' : list (sigT (ll Q)) & (map (@projT1 _ (ll Q)) L') = (map (@projT1 _ (ll P)) L)}) as (L' & eqL').
   + destruct eqpmix.
     induction L.
@@ -622,63 +646,84 @@ Qed.
 Lemma co_list_r {P} : forall l l',
   ll P (map wn l ++ map wn l ++ l') -> ll P (map wn l ++ l').
 Proof with myeeasy.
-induction l ; intros l' pi...
-rewrite <- app_nil_l.
-apply (ex_wn_r _ _ (l ++ a :: nil)) ; [ | perm_Type_solve ].
-list_simpl ; apply IHl.
-cons2app ; rewrite 2 app_assoc.
-replace ((map wn l ++ map wn l) ++ wn a :: nil)
-  with (nil ++ map wn (l ++ l ++ a :: nil))
-  by (list_simpl ; reflexivity).
-rewrite <- app_assoc.
-apply (ex_wn_r _ _ (a :: l ++ l)) ; [ | perm_Type_solve ].
-list_simpl.
-apply co_r.
-rewrite 2 app_comm_cons ; rewrite app_assoc.
-replace ((wn a :: wn a :: map wn l) ++ map wn l)
-   with (map wn (a :: a :: l ++ l))
-   by (list_simpl ; reflexivity).
-rewrite <- app_nil_l.
-rewrite app_assoc in pi.
-replace (map wn (a :: l) ++ (map wn (a :: l)))
-  with (map wn (a :: l ++ a :: l))
-  in pi by (list_simpl ; reflexivity).
-rewrite <- app_nil_l in pi.
-eapply ex_wn_r ; [ eassumption | perm_Type_solve ].
+  induction l ; intros l' pi...
+  rewrite <- app_nil_l.
+  replace (a :: l) with (app_nat_fun (l ++ a :: nil) (incr_all (Id (length (a :: nil))) (length l) ++ (Id (length l)))) by app_nat_fun_solve.
+  apply ex_wn_r; [ | is_perm_run | length_lia]...
+  list_simpl ; apply IHl.
+  cons2app ; rewrite 2 app_assoc.
+  replace ((map wn l ++ map wn l) ++ wn a :: nil)
+    with (nil ++ map wn (l ++ l ++ a :: nil))
+    by (list_simpl ; reflexivity).
+  rewrite <- app_assoc.
+  replace (l ++ l ++ a :: nil) with
+      (app_nat_fun
+         ((a :: nil) ++  l ++ l)
+         (incr_all (Id (length l)) (length (a :: nil)) ++
+                   incr_all (Id (length l)) (length l + length ((a :: nil))) ++
+                   Id (length (a :: nil)))) by app_nat_fun_solve.
+  apply ex_wn_r ; [ | is_perm_run | length_lia ].
+  list_simpl.
+  apply co_r.
+  rewrite 2 app_comm_cons ; rewrite app_assoc.
+  replace ((wn a :: wn a :: map wn l) ++ map wn l)
+    with (map wn (a :: a :: l ++ l))
+    by (list_simpl ; reflexivity).
+  rewrite <- app_nil_l.
+  rewrite app_assoc in pi.
+  replace (map wn (a :: l) ++ (map wn (a :: l)))
+    with (map wn (a :: l ++ a :: l))
+    in pi by (list_simpl ; reflexivity).
+  rewrite <- app_nil_l in pi.
+  replace (a :: a :: l ++ l) with
+      (app_nat_fun
+         ((a :: nil) ++ l ++ (a :: nil) ++ l)
+         (Id (length (a :: nil)) ++
+             incr_all (Id (length (a :: nil))) (length l + length (a :: nil)) ++
+             incr_all (Id (length l)) (length (a :: nil)) ++
+             incr_all (Id (length l)) (length (a :: nil) + length l + length (a :: nil)))) by app_nat_fun_solve.
+  apply ex_wn_r ; [ | is_perm_run | length_lia]...
 Qed.
 
 
 Lemma co_list_gen_perm_r {P} (P_perm : pperm P = true) : forall L l0 l,
     ll P (l ++ flat_map (app (map wn l0)) L) ->
     ll P (l ++ (map wn l0) ++ concat L).
-Proof with try assumption.
+Proof with try assumption; try reflexivity.
   intros L.
   induction L ; intros l0 l pi.
-  - apply ex_r with (map wn l0 ++ l ++ concat nil).
-    + apply wk_list_r...
-    + rewrite P_perm; simpl; perm_Type_solve.
-  - apply ex_r with (map wn l0 ++ l ++ concat (a :: L)) ; [ | rewrite P_perm; simpl; try perm_Type_solve].
+  - prove_perm (l ++ map wn l0 ++ concat nil) (map wn l0 :: l :: concat nil :: nil) (1 :: 0 :: 2 :: nil).
+    apply ex_r; [ | rewrite P_perm; simpl;  is_perm_run | length_lia ].
+    apply wk_list_r...
+  - prove_perm (l ++ map wn l0 ++ concat (a :: L)) (map wn l0 :: l :: concat (a :: L) :: nil) (1 :: 0 :: 2 :: nil).
+    apply ex_r ; [ | rewrite P_perm; simpl; is_perm_run | length_lia].
     apply co_list_r.
-    apply ex_r with ((l ++ (map wn l0 ++ a)) ++ map wn l0 ++ concat L) ; [ | rewrite P_perm; simpl; try perm_Type_solve].
+    change (concat (a :: L)) with (a ++ concat L).
+    rewrite<- app_assoc; rewrite app_nil_r.
+    prove_perm (map wn l0 ++ map wn l0 ++ l ++ a ++ concat L) (l :: map wn l0 :: a :: map wn l0 :: concat L :: nil) (1 :: 3 :: 0 :: 2 :: 4 :: nil).
+    apply ex_r ; [ | rewrite P_perm; simpl; is_perm_run | length_lia].
+    rewrite app_nil_r.
+    rewrite 2 app_assoc.
     apply IHL.
-    rewrite<- app_assoc.
-    simpl in pi...
+    rewrite<- ? app_assoc.
+    simpl in pi.
+    rewrite<- ? app_assoc in pi...
 Qed.   
 
 (** Permutation on mix *)
-Lemma ex_mix_r {P} : forall L L' (eq : pmix P (length L) = true) (p : Permutation_Type L L'),
+Lemma ex_mix_r {P} : forall L L' (eq : pmix P (length L) = true) (p : Perm_R L L'),
     Forall_Type (ll P) L ->
     ll P (concat L').
 Proof with try assumption.
   intros L L' eq p FL.
   apply mix_r.
   - replace (length L') with (length L)...
-    apply Permutation_Type_length...
+    apply Perm_R_length...
   - apply forall_Forall_Type.
     intros l Hin.
     apply (@Forall_Type_forall (list formula) (ll P) L)...
-    apply Permutation_Type_in_Type with L'...
-    apply Permutation_Type_sym...
+    apply Perm_R_in_Type with L'...
+    apply Perm_R_sym...
 Qed.
 
 (** *** Some tactics for manipulating rules *)
@@ -707,36 +752,17 @@ Ltac destruct_ll H f X l Hl Hr HP FL a :=
 
 Ltac ll_swap :=
   match goal with
-  | |- ll ?P (?a1 :: ?a2 :: nil) => eapply ex_r ; [ | apply PCperm_Type_swap ]
+  | |- ll ?P (?a1 :: ?a2 :: nil) => eapply ex'_r ; [ | apply PCperm_R_swap ]
   end.
 Ltac ll_swap_hyp H :=
   match goal with
   | H : ll ?P (?a1 :: ?a2 :: nil) |- _ =>
-        eapply ex_r in H ;[ | apply PCperm_Type_swap ]
+        eapply ex'_r in H ;[ | apply PCperm_R_swap ]
   end.
 Tactic Notation "ll_swap" "in" hyp(H) := ll_swap_hyp H.
 
 
 (** ** Some reversibility statements *)
-
-
-(* NEED MOVING *)
-Lemma flat_map_elt {A B} {f : A -> list B} : forall a L l1 l2,
-     flat_map f L = l1 ++ a :: l2 ->
-     {' (L1,L2,L0,l1',l2') | l1 = flat_map f L1 ++ l1' /\ l2 = l2' ++ 
-flat_map f L2
-                          /\ L = L1 ++ L0 :: L2 /\ f L0 = l1' ++ a :: l2' }.
-Proof with try reflexivity.
-   intros a L l1 l2 Heq.
-   rewrite flat_map_concat_map in Heq.
-   apply concat_elt in Heq ; destruct Heq as (L1 & L2 & l1'' & l2'' & 
-eqb & eqt & eq) ; subst.
-   symmetry in eq ; decomp_map_Type eq ; subst.
-   simpl in eq3 ; symmetry in eq3.
-   exists (l0,l2,x,l1'',l2'') ; simpl ; nsplit 4 ; try rewrite 
-flat_map_concat_map...
-   assumption.
-Qed.
 
 Lemma bot_rev {P} : (forall a, In bot (projT2 (pgax P) a) -> False) ->
   forall l1 l2, ll P (l1 ++ bot :: l2) -> ll P (l1 ++ l2).
@@ -748,16 +774,25 @@ induction pi using (ll_nested_ind P) ; intros l1' l2' Heq ; subst.
   destruct l1' ; inversion Heq.
   destruct l1' ; inversion H1.
   destruct l1' ; inversion H3.
-- apply PCperm_Type_vs_elt_inv in p.
+- assert (PCperm_R (pperm P) l1 (l1' ++ bot :: l2')).
+  { revert p; destruct (pperm P); simpl; intro p.
+    - split with (existT _ f p).
+      unfold app_perm; simpl.
+      split ; [ | symmetry]...
+    - split with (existT _ f p).
+      unfold app_CyclicPerm; simpl.
+      split; [ | symmetry]... }
+  clear p Hlen Heq f; rename X into p.
+  apply PCperm_R_vs_elt_inv in p.
   destruct p as [(l3 & l4) Heq HP'].
   simpl in HP' ; simpl in Heq.
   apply IHpi in Heq...
-  eapply ex_r...
-  apply PEperm_PCperm_Type in HP' ; unfold id in HP'.
-  apply PCperm_Type_sym.
-  eapply PCperm_Type_trans ; [ apply PCperm_Type_app_comm | ].
-  eapply PCperm_Type_trans ; [ apply HP' | ].
-  apply PCperm_Type_app_comm.
+  eapply ex'_r...
+  apply PEperm_PCperm_R in HP' ; unfold id in HP'.
+  apply PCperm_R_sym.
+  eapply PCperm_R_trans ; [ apply PCperm_R_app_comm | ].
+  eapply PCperm_R_trans ; [ apply HP' | ].
+  apply PCperm_R_app_comm.
 - dichot_Type_elt_app_exec Heq ; subst.
   + rewrite app_assoc.
     eapply ex_wn_r...
@@ -768,7 +803,7 @@ induction pi using (ll_nested_ind P) ; intros l1' l2' Heq ; subst.
     * list_simpl ; eapply ex_wn_r...
       rewrite 2 app_assoc.
       apply IHpi ; list_simpl...
-- apply concat_elt in Heq as (L1 & L2 & l1 & l2 & eqb & eqt & eq); subst.
+- apply concat_elt in Heq as ((((L1 & L2) & l1) & l2) & eqb & eqt & eq); subst.
   apply Dependent_Forall_Type_app_inv in X as ((l1' & Fl1) & (l2' & Fl2)).
   inversion Fl2; subst.
   replace ((concat L1 ++ l1) ++ l2 ++ concat L2) with (concat (L1 ++ (l1 ++ l2) :: L2)) ; [ |rewrite concat_app; simpl; rewrite 3 app_assoc; reflexivity].
@@ -854,18 +889,27 @@ induction pi using (ll_nested_ind P) ; intros A' B' l1' l2' Heq ; subst.
   destruct l1' ; inversion Heq.
   destruct l1' ; inversion H1.
   destruct l1' ; inversion H3.
-- apply PCperm_Type_vs_elt_inv in p.
+- assert (PCperm_R (pperm P) l1 (l1' ++ parr A' B' :: l2')).
+  { revert p; destruct (pperm P); simpl; intro p.
+    - split with (existT _ f p).
+      unfold app_perm; simpl.
+      split ; [ | symmetry]...
+    - split with (existT _ f p).
+      unfold app_CyclicPerm; simpl.
+      split; [ | symmetry]... }
+  clear f Hlen Heq p; rename X into p.
+  apply PCperm_R_vs_elt_inv in p.
   destruct p as [(l3 & l4) Heq HP'].
   simpl in HP'.
   apply IHpi in Heq...
-  eapply ex_r...
+  eapply ex'_r...
   destruct (pperm P) ; simpl in HP' ; simpl.
-  + apply Permutation_Type_sym.
-    eapply Permutation_Type_trans ; [ apply Permutation_Type_app_comm | ].
-    eapply Permutation_Type_trans ; [ | apply Permutation_Type_app_comm ].
-    perm_Type_solve.
-  + eapply cperm_Type_trans ; [ apply cperm_Type | ].
-    list_simpl ; rewrite <- HP' ; cperm_Type_solve.
+  + apply Perm_R_sym.
+    eapply Perm_R_trans ; [ apply Perm_R_app_comm | ].
+    eapply Perm_R_trans ; [ | apply Perm_R_app_comm ].
+    Perm_R_solve.
+  + eapply CyclicPerm_R_trans; [ apply CyclicPerm_R_commu | ].
+    list_simpl ; rewrite <- HP' ; CyclicPerm_R_solve.
 - dichot_Type_elt_app_exec Heq ; subst.
   + rewrite 2 app_comm_cons ; rewrite app_assoc.
     eapply ex_wn_r...
@@ -876,7 +920,7 @@ induction pi using (ll_nested_ind P) ; intros A' B' l1' l2' Heq ; subst.
     * list_simpl ; eapply ex_wn_r...
       rewrite 2 app_assoc.
       apply IHpi ; list_simpl...
-- apply concat_elt in Heq as (L1 & L2 & l1 & l2 & eqb & eqt & eq); subst.
+- apply concat_elt in Heq as ((((L1 & L2) & l1) & l2) & eqb & eqt & eq); subst.
   replace ((concat L1 ++ l1) ++ A' :: B' :: l2 ++ concat L2) with (concat (L1 ++ (l1 ++ A' :: B' :: l2) :: L2)) ; [ |rewrite concat_app; simpl; rewrite ? app_comm_cons; rewrite ? app_assoc; reflexivity].
   apply mix_r...
   + rewrite app_length.
@@ -958,17 +1002,26 @@ induction pi using (ll_nested_ind P); intros l1' l2' Heq ; subst.
   destruct l1' ; inversion Heq.
   destruct l1' ; inversion H1.
   destruct l1' ; inversion H3.
-- apply PCperm_Type_vs_elt_inv in p.
+- assert (PCperm_R (pperm P) l1 (l1' ++ one :: l2')).
+  { revert p; destruct (pperm P); simpl; intro p.
+    - split with (existT _ f p).
+      unfold app_perm; simpl.
+      split ; [ | symmetry]...
+    - split with (existT _ f p).
+      unfold app_CyclicPerm; simpl.
+      split; [ | symmetry]... }
+  clear f Hlen Heq p; rename X into p.
+  apply PCperm_R_vs_elt_inv in p.
   destruct p as [(l3 & l4) Heq HP'].
   simpl in HP' ; apply IHpi in Heq...
-  eapply ex_r...
+  eapply ex'_r...
   destruct (pperm P) ; simpl in HP' ; simpl.
-  + apply Permutation_Type_sym.
-    eapply Permutation_Type_trans ; [ apply Permutation_Type_app_comm | ].
-    eapply Permutation_Type_trans ; [ | apply Permutation_Type_app_comm ].
-    perm_Type_solve.
-  + eapply cperm_Type_trans ; [ apply cperm_Type | ].
-    list_simpl ; rewrite <- HP' ; cperm_Type_solve.
+  + apply Perm_R_sym.
+    eapply Perm_R_trans ; [ apply Perm_R_app_comm | ].
+    eapply Perm_R_trans ; [ | apply Perm_R_app_comm ].
+    Perm_R_solve.
+  + eapply CyclicPerm_R_trans ; [ apply CyclicPerm_R_commu | ].
+    list_simpl ; rewrite <- HP' ; CyclicPerm_R_solve.
 - dichot_Type_elt_app_exec Heq ; subst.
   + rewrite 2 app_assoc.
     eapply ex_wn_r...
@@ -979,7 +1032,7 @@ induction pi using (ll_nested_ind P); intros l1' l2' Heq ; subst.
     * list_simpl ; eapply ex_wn_r...
       rewrite 2 app_assoc.
       apply IHpi ; list_simpl...
-- apply concat_elt in Heq as (L1 & L2 & l1 & l2 & eqb & eqt & eq); subst.
+- apply concat_elt in Heq as ((((L1 & L2) & l1) & l2) & eqb & eqt & eq); subst.
   replace ((concat L1 ++ l1) ++ l0 ++ l2 ++ concat L2) with (concat (L1 ++ (l1 ++ l0 ++ l2) :: L2)) ; [ |rewrite concat_app; simpl; rewrite ? app_comm_cons; rewrite ? app_assoc; reflexivity].
   apply mix_r...
   + rewrite app_length.
@@ -1060,17 +1113,26 @@ induction pi using (ll_nested_ind P) ; intros A' l1' l2' Heq ; subst.
   destruct l1' ; inversion Heq.
   destruct l1' ; inversion H1.
   destruct l1' ; inversion H3.
-- apply PCperm_Type_vs_elt_inv in p.
+- assert (PCperm_R (pperm P) l1 (l1' ++ tens one A' :: l2')).
+  { revert p; destruct (pperm P); simpl; intro p.
+    - split with (existT _ f p).
+      unfold app_perm; simpl.
+      split ; [ | symmetry]...
+    - split with (existT _ f p).
+      unfold app_CyclicPerm; simpl.
+      split; [ | symmetry]... }
+  clear f Hlen Heq p; rename X into p.
+  apply PCperm_R_vs_elt_inv in p.
   destruct p as [(l3 & l4) Heq HP'].
   simpl in HP' ; apply IHpi in Heq...
-  simpl in Heq ; eapply ex_r...
+  simpl in Heq ; eapply ex'_r...
   destruct (pperm P) ; simpl in HP' ; simpl.
-  + apply Permutation_Type_sym.
-    eapply Permutation_Type_trans ; [ apply Permutation_Type_app_comm | ].
-    eapply Permutation_Type_trans ; [ | apply Permutation_Type_app_comm ].
-    perm_Type_solve.
-  + eapply cperm_Type_trans ; [ apply cperm_Type | ].
-    list_simpl ; rewrite <- HP' ; cperm_Type_solve.
+  + apply Perm_R_sym.
+    eapply Perm_R_trans ; [ apply Perm_R_app_comm | ].
+    eapply Perm_R_trans ; [ | apply Perm_R_app_comm ].
+    Perm_R_solve.
+  + eapply CyclicPerm_R_trans ; [ apply CyclicPerm_R_commu | ].
+    list_simpl ; rewrite <- HP' ; CyclicPerm_R_solve.
 - dichot_Type_elt_app_exec Heq ; subst.
   + rewrite app_comm_cons ; rewrite app_assoc.
     eapply ex_wn_r...
@@ -1081,7 +1143,7 @@ induction pi using (ll_nested_ind P) ; intros A' l1' l2' Heq ; subst.
     * list_simpl ; eapply ex_wn_r...
       rewrite 2 app_assoc.
       apply IHpi ; list_simpl...
-- apply concat_elt in Heq as (L1 & L2 & l1 & l2 & eqb & eqt & eq); subst.
+- apply concat_elt in Heq as ((((L1 & L2) & l1) & l2) & eqb & eqt & eq); subst.
   replace ((concat L1 ++ l1) ++ A' :: l2 ++ concat L2) with (concat (L1 ++ (l1 ++ A' :: l2) :: L2)) ; [ |rewrite concat_app; simpl; rewrite ? app_comm_cons; rewrite ? app_assoc; reflexivity].
   apply mix_r...
   + rewrite app_length.
@@ -1157,20 +1219,29 @@ intros Hgax Hcut A B pi.
 remember (tens A B :: nil) as l ; revert A B Heql ;
   induction pi using (ll_nested_ind P) ; intros A' B' Heq ; subst ;
   try (now inversion Heq).
-- apply PCperm_Type_sym in p.
-  apply PCperm_Type_length_1_inv in p ; subst.
+- assert (PCperm_R (pperm P) l1 (tens A' B' :: nil)).
+  { revert p; destruct (pperm P); simpl; intro p.
+    - split with (existT _ f p).
+      unfold app_perm; simpl.
+      split ; [ | symmetry]...
+    - split with (existT _ f p).
+      unfold app_CyclicPerm; simpl.
+      split; [ | symmetry]... }
+  clear f Hlen Heq p; rename X into p.
+  apply PCperm_R_sym in p.
+  apply PCperm_R_length_1_inv in p ; subst.
   apply IHpi...
 - destruct l1 ; inversion Heq.
-  + destruct lw' ; inversion H0 ; list_simpl in H0.
-    symmetry in p ; apply Permutation_Type_nil in p ; subst.
+  + remember (app_nat_fun lw f) as lw'.
+    destruct lw' ; inversion H0 ; list_simpl in H0.
     apply IHpi...
+    destruct lw ; [ | destruct f; try now inversion Heqlw'; try now inversion Hlen]...
   + apply app_eq_nil in H1 ; destruct H1 ; subst.
     apply app_eq_nil in H1 ; destruct H1 ; subst.
-    destruct lw' ; inversion H.
-    symmetry in p ; apply Permutation_Type_nil in p ; subst.
+    destruct lw ; [ | destruct f; inversion Hlen; inversion H].
     apply IHpi...
 - change (tens A' B' :: nil) with (nil ++ tens A' B' :: nil) in Heq.
-  apply concat_elt in Heq as (L1 & L2 & l1' & l2' & eqb & eqt & eqL); subst.
+  apply concat_elt in Heq as ((((L1 & L2) & l1') & l2') & eqb & eqt & eqL); subst.
   destruct l1'.
   + destruct l2' ; try now inversion eqt.
     destruct (Dependent_Forall_Type_app_inv _ _ _ _ X) as ((FL1 & PL1) & (FL2 & PL2)).
@@ -1193,20 +1264,29 @@ intros Hgax Hcut A B pi.
 remember (aplus A B :: nil) as l ; revert A B Heql ;
   induction pi using (ll_nested_ind P) ; intros A' B' Heq ; subst ;
   try (now inversion Heq).
-- apply PCperm_Type_sym in p.
-  apply PCperm_Type_length_1_inv in p ; subst.
+- assert (PCperm_R (pperm P) l1 (aplus A' B' :: nil)).
+  { revert p; destruct (pperm P); simpl; intro p.
+    - split with (existT _ f p).
+      unfold app_perm; simpl.
+      split ; [ | symmetry]...
+    - split with (existT _ f p).
+      unfold app_CyclicPerm; simpl.
+      split; [ | symmetry]... }
+  clear f Hlen Heq p; rename X into p.
+  apply PCperm_R_sym in p.
+  apply PCperm_R_length_1_inv in p ; subst.
   apply IHpi...
 - destruct l1 ; inversion Heq.
-  + destruct lw' ; inversion H0 ; list_simpl in H0.
-    symmetry in p ; apply Permutation_Type_nil in p ; subst.
-    apply IHpi...
+  + remember (app_nat_fun lw f) as lw'.
+    destruct lw' ; inversion H0 ; list_simpl in H0.
+    apply IHpi.
+    destruct lw; [ | destruct f; try inversion Heqlw'; try inversion Hlen]...
   + apply app_eq_nil in H1 ; destruct H1 ; subst.
     apply app_eq_nil in H1 ; destruct H1 ; subst.
-    destruct lw' ; inversion H.
-    symmetry in p ; apply Permutation_Type_nil in p ; subst.
+    destruct lw ; [ | destruct f; inversion Hlen ; inversion H].
     apply IHpi...
 - change (aplus A' B' :: nil) with (nil ++ aplus A' B' :: nil) in Heq.
-  apply concat_elt in Heq as (L1 & L2 & l1' & l2' & eqb & eqt & eqL); subst.
+  apply concat_elt in Heq as ((((L1 & L2) & l1') & l2') & eqb & eqt & eqL); subst.
   destruct l1'.
   + destruct l2' ; try now inversion eqt.
     destruct (Dependent_Forall_Type_app_inv _ _ _ _ X) as ((FL1 & PL1) & (FL2 & PL2)).
@@ -1264,7 +1344,7 @@ Qed.
 
 Lemma munit_elim {P} : (forall a, Forall atomic (projT2 (pgax P) a)) ->
   forall l1, ll P l1 -> forall l2, Forall2_Type munit_smp l1 l2 -> ll P l2.
-Proof with try eassumption.
+Proof with try eassumption; try reflexivity.
 intros Hgax l1 pi ; induction pi using (ll_nested_ind P) ; intros l2' HF ;
   try now (inversion HF ; subst ;
            inversion H1 ; subst ;
@@ -1276,10 +1356,19 @@ intros Hgax l1 pi ; induction pi using (ll_nested_ind P) ; intros l2' HF ;
   inversion Hc' ; subst.
   inversion Hc'' ; subst.
   apply ax_r.
-- symmetry in p.
-  eapply PCperm_Type_Forall2 in p as [la HP] ; [ | eassumption ].
+- assert (PCperm_R (pperm P) l0 (app_nat_fun l0 f)).
+  { revert p; destruct (pperm P); simpl; intro p.
+    - split with (existT _ f p).
+      unfold app_perm; simpl.
+      split ; [ | symmetry]...
+    - split with (existT _ f p).
+      unfold app_CyclicPerm; simpl.
+      split; [ | symmetry]... }
+  clear Hlen p; rename X into p.
+  symmetry in p.
+  eapply PCperm_R_Forall2 in p as [la HP] ; [ | eassumption ].
   symmetry in HP.
-  eapply ex_r ; [ | apply HP ].
+  eapply ex'_r ; [ | apply HP ].
   apply IHpi ; assumption.
 - apply Forall2_Type_app_inv_l in HF as ([ l' HF1 HF2 ] & Heq) ;
     simpl in Heq ; subst.
@@ -1287,13 +1376,18 @@ intros Hgax l1 pi ; induction pi using (ll_nested_ind P) ; intros l2' HF ;
     simpl in Heq ; rewrite Heq ; clear Heq.
   assert (HF4 := HF2).
   apply munit_smp_map_wn in HF2 as [ l''' Heq HF2 ] ; rewrite_all Heq ; clear Heq.
+  assert (Perm_R lw (app_nat_fun lw f)).
+  { split with (existT _ f p).
+    unfold app_perm; simpl.
+    split... }
+  clear Hlen p; rename X into p.
   symmetry in p.
-  apply (Permutation_Type_map wn) in p.
-  eapply Permutation_Type_Forall2 in p as [la HP] ; [ | eassumption ].
+  apply (Perm_R_map wn) in p.
+  eapply Perm_R_Forall2 in p as [la HP] ; [ | eassumption ].
   symmetry in HP.
-  apply Permutation_Type_map_inv in HP ; destruct HP as [lb Heq HP] ; subst.
+  apply Perm_R_map_inv in HP ; destruct HP as [lb Heq HP] ; subst.
   symmetry in HP.
-  eapply ex_wn_r ; [ | apply HP ].
+  eapply ex_wn'_r ; [ | apply HP ].
   apply IHpi.
   repeat apply Forall2_Type_app...
 - destruct (@concat_Forall2_Type formula) with formula L l2' munit_smp as (L' & eq & HF')...
@@ -1375,13 +1469,13 @@ induction A ; simpl.
   apply one_r.
 - ll_swap.
   apply parr_r.
-  cons2app ; eapply ex_r ; [ | apply PCperm_Type_app_rot ].
+  cons2app ; eapply ex'_r ; [ | apply PCperm_R_app_rot ].
   rewrite app_assoc.
   apply tens_r...
 - apply parr_r.
   ll_swap in IHA1.
   ll_swap in IHA2.
-  cons2app ; eapply ex_r ; [ | apply PCperm_Type_app_rot ].
+  cons2app ; eapply ex'_r ; [ | apply PCperm_R_app_rot ].
   rewrite app_assoc.
   apply tens_r...
 - ll_swap.
@@ -1426,9 +1520,7 @@ induction pi using (ll_nested_ind P) ; simpl ; intros Hgax ;
 - apply IHpi in Hgax.
   eapply ex_r...
   destruct (pperm P) ; destruct (pperm Q) ; inversion Hperm ; simpl ; simpl in p...
-  apply cperm_perm_Type...
-- apply IHpi in Hgax.
-  eapply ex_wn_r...
+  apply CyclicPerm_Perm...
 - apply mix_r.
   + specialize Hmix with (length L).
     rewrite eqpmix in Hmix.
@@ -1553,18 +1645,27 @@ Lemma ext_wn_param P Q (Q_perm : pperm Q = true) : forall l l0,
 Proof with myeeasy.
 intros l l0 pi Hpcut Hpgax Hpmix.
 induction pi using (ll_nested_ind P); try (now constructor).
-- eapply ex_r ; [ | apply PCperm_Type_app_comm ]...
+- eapply ex'_r ; [ | apply PCperm_R_app_comm ]...
   apply wk_list_r.
   apply ax_r.
-- eapply ex_r...
-  apply PCperm_perm_Type in p.
-  rewrite Q_perm.
-  apply Permutation_Type_app_tail...
+- apply PCperm_Perm in p. 
+  replace (app_nat_fun l1 f ++ map wn l0) with (app_nat_fun (l1 ++ map wn l0) (f ++ (incr_all (Id (length (map wn l0))) (length l1)))).
+  2:{ rewrite app_nat_fun_app.
+      rewrite app_nat_fun_right; [ rewrite app_Id; rewrite app_nat_fun_left |]...
+      - apply andb_prop in p as [Halt _].
+        rewrite<- Hlen...
+      - apply all_lt_Id. }
+  apply ex_r...
+  + rewrite Q_perm.
+    rewrite<- Hlen.
+    apply append_perm_is_perm...
+    apply Id_is_perm.
+  + rewrite ? app_length; rewrite incr_all_length; rewrite Id_length...
 - list_simpl.
   eapply ex_wn_r...
   rewrite app_assoc in IHpi ; rewrite 2 app_assoc...
 - case_eq (pmix Q (length L)); intro Q_mix.
-  + apply ex_r with (map wn l0 ++ concat L) ; [ | PCperm_Type_solve].
+  + apply ex'_r with (map wn l0 ++ concat L); [ | PCperm_R_solve].
     rewrite<- (app_nil_l _); apply co_list_gen_perm_r...
     rewrite app_nil_l.
     rewrite flat_map_concat_map.
@@ -1576,8 +1677,8 @@ induction pi using (ll_nested_ind P); try (now constructor).
       apply (In_Forall_Type_in _ _ _ PL) in Hin as (pil1 & Hin).
       apply (Dependent_Forall_Type_in (list_eq_dec formula_eq_dec) _ _ _ _ _ X) in Hin as pi.
       rewrite<- eq.
-      apply ex_r with (l1 ++ map wn l0)...
-      PCperm_Type_solve.
+      apply ex'_r with (l1 ++ map wn l0)...
+      PCperm_R_solve.
   + apply Hpmix...
     apply forall_Forall_Type.
     intros l' Hin.
@@ -1585,23 +1686,23 @@ induction pi using (ll_nested_ind P); try (now constructor).
     apply (In_Forall_Type_in _ _ _ PL) in Hin as (pil1 & Hin).
     apply (Dependent_Forall_Type_in (list_eq_dec formula_eq_dec) _ _ _ _ _ X) in Hin as pi.
     rewrite<- eq...
-- eapply ex_r ; [ | apply PCperm_Type_app_comm ]...
+- eapply ex'_r ; [ | apply PCperm_R_app_comm ]...
   apply wk_list_r.
   apply one_r.
-- eapply ex_r ; [ | apply PCperm_Type_app_comm ]...
+- eapply ex'_r ; [ | apply PCperm_R_app_comm ]...
   apply co_list_r.
-  apply (ex_r _ (tens A B :: (l2 ++ map wn l0) ++ l1 ++ map wn l0)) ;
-    [ | rewrite Q_perm ; PCperm_Type_solve ].
+  apply (ex'_r _ (tens A B :: (l2 ++ map wn l0) ++ l1 ++ map wn l0)) ;
+    [ | rewrite Q_perm ; PCperm_R_solve ].
   apply tens_r...
 - rewrite <- app_comm_cons in IHpi.
   rewrite <- map_app in IHpi.
   rewrite <- app_comm_cons.
   rewrite <- map_app.
   apply oc_r...
-- eapply ex_r ; [ | apply PCperm_Type_app_comm ]...
+- eapply ex'_r ; [ | apply PCperm_R_app_comm ]...
   apply co_list_r.
-  apply (ex_r _ ((l2 ++ map wn l0) ++ l1 ++ map wn l0)) ;
-    [ | rewrite Q_perm ; PCperm_Type_solve ].
+  apply (ex'_r _ ((l2 ++ map wn l0) ++ l1 ++ map wn l0)) ;
+    [ | rewrite Q_perm ; PCperm_R_solve ].
   eapply cut_r...
   intuition.
 - apply Hpgax...

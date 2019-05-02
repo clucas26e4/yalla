@@ -54,7 +54,7 @@ yalla_ax.vo: yalla_ax.v $(OLLIBSDIR)/Injective.vo
 
 formulas.vo: formulas.v $(OLLIBSDIR)/Injective.vo $(OLLIBSDIR)/Bool_more.vo yalla_ax.vo
 fmformulas.vo: fmformulas.v $(OLLIBSDIR)/Injective.vo $(OLLIBSDIR)/nattree.vo $(OLLIBSDIR)/fmsetlist_Type.vo formulas.vo
-ll_def.vo: ll_def.v $(OLLIBSDIR)/Bool_more.vo $(OLLIBSDIR)/List_more.vo $(OLLIBSDIR)/List_Type_more.vo $(OLLIBSDIR)/Permutation_Type_more.vo $(OLLIBSDIR)/CyclicPerm_Type.vo $(OLLIBSDIR)/Permutation_Type_solve.vo $(OLLIBSDIR)/CPermutation_Type_solve.vo $(OLLIBSDIR)/genperm_Type.vo basic_misc.vo formulas.vo
+ll_def.vo: ll_def.v $(OLLIBSDIR)/Bool_more.vo $(OLLIBSDIR)/List_more.vo $(OLLIBSDIR)/List_Type_more.vo $(OLLIBSDIR)/Dependent_Forall_Type.vo $(OLLIBSDIR)/concat_Type_more.vo List_nat.vo List_manip.vo Perm_R_more.vo CyclicPerm_R.vo Perm_R_solve.vo CyclicPerm_R_solve.vo genperm_R.vo basic_misc.vo formulas.vo Perm_solve.vo
 subs.vo: subs.v $(OLLIBSDIR)/List_more.vo $(OLLIBSDIR)/Permutation_Type.vo $(OLLIBSDIR)/genperm_Type.vo ll_def.vo
 ll_cut.vo: ll_cut.v $(OLLIBSDIR)/Injective.vo $(OLLIBSDIR)/List_more.vo $(OLLIBSDIR)/List_Type_more.vo $(OLLIBSDIR)/Permutation_Type_more.vo $(OLLIBSDIR)/genperm_Type.vo $(OLLIBSDIR)/flat_map_Type_more.vo $(OLLIBSDIR)/wf_nat_more.vo ll_def.vo
 ll_prop.vo: ll_prop.v $(OLLIBSDIR)/Bool_more.vo $(OLLIBSDIR)/List_more.vo $(OLLIBSDIR)/Permutation_Type_more.vo $(OLLIBSDIR)/CyclicPerm_Type.vo $(OLLIBSDIR)/genperm_Type.vo ll_cut.vo
@@ -85,10 +85,16 @@ llpol.vo: llpol.v $(OLLIBSDIR)/Injective.vo $(OLLIBSDIR)/List_more.vo $(OLLIBSDI
 lambek.vo: lambek.v $(OLLIBSDIR)/Injective.vo $(OLLIBSDIR)/List_more.vo $(OLLIBSDIR)/List_Type_more.vo ill_cut.vo
 lj.vo: lj.v $(OLLIBSDIR)/Injective.vo $(OLLIBSDIR)/List_more.vo $(OLLIBSDIR)/List_Type_more.vo $(OLLIBSDIR)/Permutation_Type_more.vo  $(OLLIBSDIR)/Permutation_Type_solve.vo ill_prop.vo
 
-Forall_Type_more2.vo: Forall_Type_more2.v $(OLLIBSDIR)/List_Type_more.vo
-Dependent_Forall_Type.vo : Dependent_Forall_Type.v $(OLLIBSDIR)/List_Type_more.vo Forall_Type_more2.vo
-concat_Type_more.vo : concat_Type_more.v Dependent_Forall_Type.vo basic_misc.vo $(OLLIBSDIR)/List_Type_more.vo
-flat_map_Type_more_new.vo : flat_map_Type_more_new.v $(OLLIBSDIR)/List_more.vo $(OLLIBSDIR)/List_Type_more.vo $(OLLIBSDIR)/Permutation_Type_more.vo $(OLLIBSDIR)/CyclicPerm_Type.vo $(OLLIBSDIR)/Injective.vo
-
-
-
+List_manip.vo : List_manip.v $(OLLIBSDIR)/List_Type_more.vo
+List_nat.vo : List_nat.v $(OLLIBSDIR)/Bool_more.vo $(OLLIBSDIR)/List_more.vo List_manip.vo
+Perm.vo : Perm.v $(OLLIBSDIR)/Bool_more.vo $(OLLIBSDIR)/List_Type_more.vo List_manip.vo List_nat.vo
+Perm_R.vo : Perm_R.v $(OLLIBSDIR)/Permutation_Type.vo $(OLLIBSDIR)/Permutation_Type_solve.vo $(OLLIBSDIR)/Bool_more.vo List_manip.vo List_nat.vo Perm.vo
+Perm_R_more.vo : Perm_R_more.v $(OLLIBSDIR)/List_Type.vo $(OLLIBSDIR)/Injective.vo $(OLLIBSDIR)/List_Type_more.vo List_manip.vo List_nat.vo Perm.vo Perm_R.vo
+Perm_R_solve.vo : Perm_R_solve.v $(OLLIBSDIR)/List_more.vo Perm_R_more.vo
+CyclicPerm_R.vo : CyclicPerm_R.v $(OLLIBSDIR)/List_Type_more.vo List_nat.vo Perm.vo Perm_R_more.vo
+CyclicPerm_R_solve.vo : CyclicPerm_R_solve.v $(OLLIBSDIR)/List_more.vo CyclicPerm_R.vo
+genperm_R.vo : genperm_R.v $(OLLIBSDIR)/Injective.vo $(OLLIBSDIR)/List_Type.vo Perm.vo Perm_R_more.vo Perm_R_solve.vo CyclicPerm_R.vo CyclicPerm_R_solve.vo List_nat.vo
+Perm_solve.vo : Perm_solve.v misc.vo all_distinct_solve.vo all_lt_solve.vo Perm.vo List_nat.vo $(OLLIBSDIR)/List_more.vo
+all_lt_solve.vo : all_lt_solve.v List_nat.vo List_manip.vo Perm.vo misc.vo $(OLLIBSDIR)/List_more.vo
+misc.vo : misc.v List_nat.vo $(OLLIBSDIR)/List_more.vo
+all_distinct_solve.vo : all_distinct_solve.v List_nat.vo List_manip.vo Perm.vo misc.vo all_lt_solve.vo $(OLLIBSDIR)/List_more.vo $(OLLIBSDIR)/Bool_more.vo
